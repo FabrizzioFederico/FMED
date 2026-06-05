@@ -1,55 +1,56 @@
-import Box from '@mui/material/Box';
-import Chip from '@mui/material/Chip';
-import CircularProgress from '@mui/material/CircularProgress';
-import Typography from '@mui/material/Typography';
+import { createContext, useContext, useState, useEffect } from 'react';
+import client, { API_URL } from '../api/client.js';
 
-export function Cargando() {
+const AuthContext = createContext();
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      verificarToken();
+    } else {
+      setLoading(false);
+    }
+  }, []);
+
+  async function verificarToken() {
+    try {
+      const { data } = await client.get(`${API_URL}/auth/me/`);
+      setUser(data);
+    } catch {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function login(dni, password) {
+    const { data } = await client.post(`${API_URL}/auth/login/`, { dni, password });
+    localStorage.setItem('access_token', data.access);
+    localStorage.setItem('refresh_token', data.refresh);
+    setUser(data.user);
+    return data;
+  }
+
+  async function logout() {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    setUser(null);
+  }
+
   return (
-    <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-      <CircularProgress />
-    </Box>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 
-export function Vacio({ children }) {
-  return (
-    <Box sx={{ textAlign: 'center', py: 4 }}>
-      <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
-        {children}
-      </Typography>
-    </Box>
-  );
-}
-
-export function Badge({ estado, texto }) {
-  const map = {
-    APROBADO: 'success', REGULAR: 'success', ABIERTA: 'success',
-    PRESENTE: 'success', ACEPTADO: 'success',
-    INSCRIPTO: 'info', JUSTIFICADO: 'info',
-    PENDIENTE: 'warning', EN_REVISION: 'warning', PROVISORIA: 'warning',
-    POSTULADO: 'warning',
-    RECHAZADO: 'error', CERRADA: 'error', AUSENTE: 'error',
-    LIBRE: 'error', BAJA: 'error', DESAPROBADO: 'error',
-    ALUMNO: 'info', PROFESOR: 'success', ADMINISTRATIVO: 'warning',
-  };
-  return (
-    <Chip
-      label={texto || estado}
-      color={map[estado] || 'default'}
-      size="small"
-      variant={map[estado] ? 'filled' : 'outlined'}
-      sx={{ fontWeight: 600, fontSize: '0.75rem' }}
-    />
-  );
-}
-
-export function mensajeError(err, fallback = 'Ocurrió un error.') {
-  const data = err?.response?.data;
-  if (!data) return fallback;
-  if (typeof data === 'string') return data;
-  if (data.detail) return data.detail;
-  const primero = Object.values(data)[0];
-  if (Array.isArray(primero)) return primero[0];
-  if (typeof primero === 'string') return primero;
-  return fallback;
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth debe usarse dentro de AuthProvider');
+  return ctx;
 }

@@ -42,7 +42,7 @@ export default function Login() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundImage: 'url(/images/fondo.jpg)', 
+        backgroundImage: 'url(/images/fondo.jpg)',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         p: 2,
@@ -71,7 +71,7 @@ export default function Login() {
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-          <Box component="form" onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit}>
             <Stack spacing={2}>
               <TextField
                 label="DNI"
@@ -95,7 +95,7 @@ export default function Login() {
                 {loading ? 'Iniciando...' : 'Entrar'}
               </Button>
             </Stack>
-          </Box>
+          </form>
 
           <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
             <Typography variant="caption" sx={{ fontWeight: 600 }}>
