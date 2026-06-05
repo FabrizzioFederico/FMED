@@ -1,6 +1,3 @@
-"""
-Configuración Django para el sistema Intranet Facultad de Medicina.
-"""
 import os
 from datetime import timedelta
 from pathlib import Path
@@ -9,7 +6,18 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
 
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-dev-key-cambiar')
+
+def env_obligatorio(nombre):
+    valor = os.getenv(nombre)
+    if valor is None:
+        raise RuntimeError(
+            f"Falta la variable de entorno '{nombre}' en el archivo .env. "
+            f"Copiá .env.example a .env y completá los valores."
+        )
+    return valor
+
+
+SECRET_KEY = env_obligatorio('DJANGO_SECRET_KEY')
 DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = ['*']
 
@@ -21,12 +29,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
-    
+    # Terceros
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
 
-    
+    # Apps propias
     'apps.usuarios',
     'apps.academico',
     'apps.inscripciones',
@@ -66,10 +74,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core.wsgi.application'
 
-
+# ------------------- BASE DE DATOS (PERS-01) -------------------
+# Las credenciales se leen del .env, sin defaults. Si falta alguna,
+# el servidor falla al arrancar con un mensaje claro.
 _DB_ENGINE = os.getenv('DB_ENGINE', 'mysql').lower()
 
 if _DB_ENGINE == 'sqlite':
+    # Modo desarrollo sin instalar MySQL
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -80,9 +91,10 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': os.getenv('DB_NAME', 'medicina_intranet'),
-            'USER': os.getenv('DB_USER', 'medicina'),
-            'PASSWORD': os.getenv('DB_PASSWORD', 'medicina123'),
+            'NAME': env_obligatorio('DB_NAME'),
+            'USER': env_obligatorio('DB_USER'),
+            'PASSWORD': os.environ['DB_PASSWORD'] if 'DB_PASSWORD' in os.environ
+                        else env_obligatorio('DB_PASSWORD'),
             'HOST': os.getenv('DB_HOST', '127.0.0.1'),
             'PORT': os.getenv('DB_PORT', '3306'),
             'OPTIONS': {
@@ -92,7 +104,7 @@ else:
         }
     }
 
-
+# Usuario personalizado
 AUTH_USER_MODEL = 'usuarios.Usuario'
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -114,7 +126,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
+# ------------------- DRF + JWT -------------------
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -126,7 +138,7 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
 }
 
-
+# RNFC1: sesión cierra a los 5 minutos de inactividad
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=5),
     'REFRESH_TOKEN_LIFETIME': timedelta(hours=8),
@@ -135,7 +147,7 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-
+# CORS para el frontend React (Vite usa 5173 por defecto)
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
