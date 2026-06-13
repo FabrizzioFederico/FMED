@@ -14,6 +14,8 @@ from reportlab.lib.units import cm
 from reportlab.lib.colors import HexColor
 from reportlab.pdfgen import canvas
 
+from .patrones_singleton import configuracion
+
 
 MESES = [
     '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -73,6 +75,10 @@ def generar_certificado_pdf(tramite) -> bytes:
 
     azul = HexColor('#1e3a8a')
     gris = HexColor('#475569')
+    tinta_firma = HexColor('#16357a')  # azul "tinta" para las rúbricas
+
+    # Singleton: datos institucionales y autoridades firmantes
+    cfg = configuracion()
 
     alumno = tramite.alumno
     nombre = f"{alumno.first_name} {alumno.last_name}".strip() or alumno.username
@@ -81,11 +87,11 @@ def generar_certificado_pdf(tramite) -> bytes:
     # ----------------- Encabezado -----------------
     c.setFillColor(azul)
     c.setFont('Helvetica-Bold', 18)
-    c.drawCentredString(ancho / 2, alto - 3 * cm, 'FACULTAD DE MEDICINA')
+    c.drawCentredString(ancho / 2, alto - 3 * cm, cfg.nombre_institucion)
 
     c.setFont('Helvetica', 11)
     c.setFillColor(gris)
-    c.drawCentredString(ancho / 2, alto - 3.7 * cm, 'Intranet Académica - Sistema de Gestión')
+    c.drawCentredString(ancho / 2, alto - 3.7 * cm, cfg.subtitulo_sistema)
 
     # Línea separadora
     c.setStrokeColor(azul)
@@ -118,17 +124,33 @@ def generar_certificado_pdf(tramite) -> bytes:
                      ancho - 6 * cm, interlineado=0.75 * cm)
 
     # ----------------- Firmas -----------------
+    # Las autoridades firmantes salen del Singleton de configuración.
+    # La firma (ficticia) se dibuja en itálica arriba de la línea para
+    # simular una rúbrica manuscrita; el cargo va debajo de la línea.
+    izq = cfg.firmante_izquierda
+    der = cfg.firmante_derecha
+
     y_firma = 7 * cm
+    centro_izq = 6.5 * cm
+    centro_der = ancho - 6.5 * cm
+
+    # Rúbrica ficticia (arriba de la línea), en itálica color tinta
+    c.setFont('Helvetica-Oblique', 15)
+    c.setFillColor(tinta_firma)
+    c.drawCentredString(centro_izq, y_firma + 0.25 * cm, izq['firma'])
+    c.drawCentredString(centro_der, y_firma + 0.25 * cm, der['firma'])
+
+    # Líneas de firma
     c.setStrokeColor(gris)
     c.setLineWidth(1)
-    # Línea izquierda
     c.line(4 * cm, y_firma, 9 * cm, y_firma)
+    c.line(ancho - 9 * cm, y_firma, ancho - 4 * cm, y_firma)
+
+    # Aclaración de cargo (debajo de cada línea)
     c.setFont('Helvetica', 10)
     c.setFillColor(gris)
-    c.drawCentredString(6.5 * cm, y_firma - 0.6 * cm, 'Secretaría Académica')
-    # Línea derecha
-    c.line(ancho - 9 * cm, y_firma, ancho - 4 * cm, y_firma)
-    c.drawCentredString(ancho - 6.5 * cm, y_firma - 0.6 * cm, 'Decanato')
+    c.drawCentredString(centro_izq, y_firma - 0.6 * cm, izq['cargo'])
+    c.drawCentredString(centro_der, y_firma - 0.6 * cm, der['cargo'])
 
     # ----------------- Código de verificación -----------------
     codigo = tramite.codigo_qr_verificacion or '(sin código)'
