@@ -8,6 +8,8 @@ Reglas aplicadas:
 - Cupos (comisiones y mesas): entre 1 y 200.
 - Fechas: deben estar entre HOY y el 31 de diciembre del año en curso.
 """
+import re
+import unicodedata
 from datetime import date
 
 from django.utils import timezone
@@ -63,6 +65,108 @@ def validar_fecha_en_rango(fecha_valor):
             f'La fecha no puede superar el {fin_de_anio.strftime("%d/%m/%Y")}.'
         )
     return fecha_valor
+
+
+# ----------------------------------------------------------------------
+# Validación del horario de comisión: solo días hábiles y 08:00-23:00
+# ----------------------------------------------------------------------
+HORA_MIN_COMISION = 8    # 08:00
+HORA_MAX_COMISION = 23   # 23:00 (11 pm)
+
+_DIAS_HABILES = {
+    'LUN': 'Lun', 'LUNES': 'Lun',
+    'MAR': 'Mar', 'MARTES': 'Mar',
+    'MIE': 'Mié', 'MIER': 'Mié', 'MIERC': 'Mié', 'MIERCOLES': 'Mié',
+    'JUE': 'Jue', 'JUEVES': 'Jue',
+    'VIE': 'Vie', 'VIERNES': 'Vie',
+}
+_DIAS_FIN_SEMANA = {'SAB', 'SABADO', 'DOM', 'DOMINGO'}
+_CONECTORES = {'Y', 'E', '-', ''}
+
+
+def _normalizar_dia(token):
+    """Pasa a mayúsculas y saca acentos para comparar sin importar tildes."""
+    t = unicodedata.normalize('NFKD', token)
+    t = ''.join(ch for ch in t if not unicodedata.combining(ch))
+    return t.upper().strip(' .')
+
+
+def validar_horario_comision(value):
+    """Valida el horario de una comisión.
+
+    Reglas:
+      - Solo días hábiles (lunes a viernes). Sábado y domingo se rechazan.
+      - Las horas deben estar entre las 08:00 y las 23:00 (11 pm).
+      - La hora de inicio debe ser anterior a la de fin.
+
+    Acepta formatos flexibles ('Lun y Mie 18-22', 'Vie 8-13') y devuelve
+    el horario normalizado, ej: 'Lun, Mié 18:00-22:00'.
+    """
+    texto = (value or '').strip()
+    if not texto:
+        raise serializers.ValidationError('Indicá el horario de la comisión.')
+
+    # Rango de horas al final: HH(:MM)? (- o 'a') HH(:MM)?
+    patron = re.compile(
+        r'(\d{1,2})(?::(\d{2}))?\s*(?:-|\u2013|a)\s*(\d{1,2})(?::(\d{2}))?\s*(?:hs|h)?\s*$',
+        re.IGNORECASE,
+    )
+    m = patron.search(texto)
+    if not m:
+        raise serializers.ValidationError(
+            "Formato inválido. Usá días + horario, ej: 'Lun, Mié 18:00-22:00'."
+        )
+
+    parte_dias = texto[:m.start()].strip(' ,')
+    if not parte_dias:
+        raise serializers.ValidationError(
+            'Indicá al menos un día hábil (de lunes a viernes).'
+        )
+
+    # Días
+    dias = []
+    for tok in re.split(r'[,\s]+', parte_dias):
+        norm = _normalizar_dia(tok)
+        if norm in _CONECTORES:
+            continue
+        if norm in _DIAS_FIN_SEMANA:
+            raise serializers.ValidationError(
+                'Solo se permiten días hábiles (de lunes a viernes).'
+            )
+        if norm not in _DIAS_HABILES:
+            raise serializers.ValidationError(
+                f"Día no reconocido: '{tok}'. Usá Lun, Mar, Mié, Jue o Vie."
+            )
+        dia = _DIAS_HABILES[norm]
+        if dia not in dias:
+            dias.append(dia)
+    if not dias:
+        raise serializers.ValidationError(
+            'Indicá al menos un día hábil (de lunes a viernes).'
+        )
+
+    # Horas
+    h1, min1 = int(m.group(1)), int(m.group(2) or 0)
+    h2, min2 = int(m.group(3)), int(m.group(4) or 0)
+    for h, mi in ((h1, min1), (h2, min2)):
+        if h > 23 or mi > 59:
+            raise serializers.ValidationError('La hora ingresada no es válida.')
+
+    inicio, fin = h1 * 60 + min1, h2 * 60 + min2
+    if inicio < HORA_MIN_COMISION * 60:
+        raise serializers.ValidationError(
+            f'El horario no puede empezar antes de las {HORA_MIN_COMISION:02d}:00.'
+        )
+    if fin > HORA_MAX_COMISION * 60:
+        raise serializers.ValidationError(
+            f'El horario no puede terminar después de las {HORA_MAX_COMISION}:00 (11 pm).'
+        )
+    if inicio >= fin:
+        raise serializers.ValidationError(
+            'La hora de inicio debe ser anterior a la de fin.'
+        )
+
+    return f"{', '.join(dias)} {h1:02d}:{min1:02d}-{h2:02d}:{min2:02d}"
 
 
 # ----------------------------------------------------------------------
@@ -224,7 +328,7 @@ class ComisionSerializer(serializers.ModelSerializer):
         return validar_texto(value, 'nombre', minimo=2)
 
     def validate_horario(self, value):
-        return validar_texto(value, 'horario', minimo=3)
+        return validar_horario_comision(value)
 
     def validate_cupo(self, value):
         return validar_cupo(value)
