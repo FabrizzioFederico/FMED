@@ -77,8 +77,22 @@ def actualizar_perfil(request):
         )
 
     user.save()
+
+    # Mensaje según lo que se cambió. Si se modificó la contraseña, se le
+    # avisa de forma explícita para que sepa que el cambio quedó hecho.
+    if 'contraseña' in cambios:
+        if len(cambios) == 1:
+            mensaje = ('Tu contraseña se cambió correctamente. La próxima vez '
+                       'que inicies sesión usá la nueva contraseña.')
+        else:
+            mensaje = ('Listo: actualizamos tu email y cambiamos tu contraseña '
+                       'correctamente. La próxima vez que inicies sesión usá la '
+                       'nueva contraseña.')
+    else:
+        mensaje = f"Se actualizó: {', '.join(cambios)}."
+
     return Response({
-        'detail': f"Se actualizó: {', '.join(cambios)}.",
+        'detail': mensaje,
         'user': UsuarioSerializer(user).data,
     })
 
