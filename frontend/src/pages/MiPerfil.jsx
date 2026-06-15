@@ -15,7 +15,7 @@ import { useSnackbar } from '../context/SnackbarContext.jsx';
 
 
 export default function MiPerfil() {
-  const { user, setUsuario } = useAuth();
+  const { user, setUser } = useAuth();
   const snackbar = useSnackbar();
 
   const [email, setEmail] = useState(user?.email || '');
@@ -45,7 +45,7 @@ export default function MiPerfil() {
     try {
       const resp = await actualizarPerfil(datos);
       snackbar.show(resp.detail, 'success');
-      if (resp.user) setUsuario(resp.user);
+      if (resp.user) setUser(resp.user);
       setPwdActual(''); setPwdNueva(''); setPwdRepetir('');
     } catch (err) {
       snackbar.show(mensajeError(err), 'error');
